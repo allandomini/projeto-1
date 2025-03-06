@@ -72,6 +72,13 @@ const ProjectScreen = ({ project, goBack, updateProject }) => {
   const [modalEditingTaskId, setModalEditingTaskId] = useState(null);
   const [modalEditingTaskText, setModalEditingTaskText] = useState('');
 
+  const [habitModalVisible, setHabitModalVisible] = useState(false);
+  const [habitName, setHabitName] = useState('');
+  const [habitPriority, setHabitPriority] = useState('medium');
+  const [habits, setHabits] = useState([]);
+  const [editingHabit, setEditingHabit] = useState(null);
+  const [newHabit, setNewHabit] = useState('');
+
   // Function to choose image from gallery
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -115,6 +122,10 @@ const ProjectScreen = ({ project, goBack, updateProject }) => {
       case 'financial':
         setFinancialModalVisible(true);
         setFinancialData(card.data || { title: 'Finanças', balance: 0, transactions: [] });
+        break;
+      case 'habit':
+        setHabitModalVisible(true);
+        setHabits(card.habits || []);
         break;
     }
     setActiveCardId(null);
@@ -175,6 +186,16 @@ const ProjectScreen = ({ project, goBack, updateProject }) => {
           order: editingCard ? editingCard.order : cards.length // preserve or assign order
         };
         setFinancialModalVisible(false);
+        break;
+      case 'habit':
+        updatedCard = {
+          id: editingCard ? editingCard.id : Date.now().toString(),
+          type: 'habit',
+          title: 'Everyday Tasks',
+          habits: habits,
+          order: editingCard ? editingCard.order : cards.length
+        };
+        setHabitModalVisible(false);
         break;
       default:
         return;
@@ -424,128 +445,185 @@ const [newTransaction, setNewTransaction] = useState({
       case 'todo':
         const totalTasks = item.tasks?.length || 0;
         const completedTasks = item.tasks?.filter(t => t.completed).length || 0;
-        const completionPercentage = totalTasks > 0 ? (completedTasks / totalTasks * 100).toFixed(0) : 0;
 
-        cardContent = (
-          <View style={styles.todoCardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-            </View>
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{totalTasks}</Text>
-                <Text style={styles.statLabel}>Tarefas</Text>
+        return (
+          <View style={[styles.verticalCard, styles.todoCard]}>
+            {/* Cabeçalho com TouchableOpacity para o duplo toque */}
+            <TouchableOpacity 
+              onPress={() => handleDoubleTap(item.id)} 
+              activeOpacity={1}
+              style={styles.touchableHeader}
+            >
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{completedTasks}</Text>
-                <Text style={styles.statLabel}>Concluídas</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{completionPercentage}%</Text>
-                <Text style={styles.statLabel}>Completo</Text>
-              </View>
-            </View>
-            
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: `${completionPercentage}%` }]} />
-            </View>
-            
-            <ScrollView style={styles.todoList} nestedScrollEnabled={true}>
-              {item.tasks && item.tasks.map(task => (
-                <View key={task.id} style={styles.todoItem}>
-                  {editingTaskId === task.id ? (
-                    // Edit mode
-                    <View style={styles.editTaskContainer}>
-                      <TextInput
-                        style={styles.editTaskInput}
-                        value={editingTaskText}
-                        onChangeText={setEditingTaskText}
-                        autoFocus
-                      />
-                      <View style={styles.editTaskButtons}>
-                        <TouchableOpacity 
-                          onPress={() => {
-                            setEditingTaskId(null);
-                            setEditingTaskText('');
-                          }}
-                          style={styles.cancelEditTaskButton}
-                        >
-                          <MaterialIcons name="close" size={18} color="#F44336" />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          onPress={() => updateTaskInCard(item.id, task.id, editingTaskText)}
-                          style={styles.confirmEditTaskButton}
-                        >
-                          <MaterialIcons name="check" size={18} color="#4DC25A" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    // Normal view
-                    <>
-                      <TouchableOpacity 
-                        onPress={() => toggleTaskComplete(item.id, task.id)}
-                        style={styles.todoCheckbox}
-                      >
-                        <MaterialIcons
-                          name={task.completed ? "check-box" : "check-box-outline-blank"}
-                          size={20}
-                          color={task.completed ? "#4DC25A" : "#757575"}
-                        />
-                      </TouchableOpacity>
-                      
-                      <Text style={[
-                        styles.todoText,
-                        task.completed && styles.todoCompleted
-                      ]}>
-                        {task.text}
-                      </Text>
-                      
-                      <View style={styles.todoActions}>
-                        <TouchableOpacity 
-                          onPress={() => {
-                            setEditingTaskId(task.id);
-                            setEditingTaskText(task.text);
-                          }}
-                          style={styles.editTaskButton}
-                        >
-                          <MaterialIcons name="edit" size={18} color="#4DC25A" />
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity 
-                          onPress={() => removeTaskFromCard(item.id, task.id)}
-                          style={styles.deleteTaskButton}
-                        >
-                          <MaterialIcons name="delete" size={18} color="#F44336" />
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  )}
+            </TouchableOpacity>
+
+            {/* Resto do conteúdo fora do TouchableOpacity */}
+            <View style={styles.todoCardContent}>
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{totalTasks}</Text>
+                  <Text style={styles.statLabel}>Tarefas</Text>
                 </View>
-              ))}
-            </ScrollView>
-            
-            <View style={styles.addTaskContainer}>
-              <TextInput
-                style={styles.addTaskInput}
-                placeholder="Nova tarefa..."
-                value={newTask}
-                onChangeText={setNewTask}
-                onSubmitEditing={() => addTaskToCard(item.id, newTask)}
-              />
-              <TouchableOpacity 
-                style={styles.addTaskButton}
-                onPress={() => addTaskToCard(item.id, newTask)}
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{completedTasks}</Text>
+                  <Text style={styles.statLabel}>Concluídas</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{completionPercentage}%</Text>
+                  <Text style={styles.statLabel}>Completo</Text>
+                </View>
+              </View>
+
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBar, { width: `${completionPercentage}%` }]} />
+              </View>
+
+              <View style={styles.todoListContainer}>
+                <ScrollView 
+                  style={styles.todoList} 
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={styles.todoListContent}
+                >
+                  {item.tasks && item.tasks.map(task => (
+                    <View key={task.id} style={styles.todoItem}>
+                      {editingTaskId === task.id ? (
+                        <View style={styles.editTaskContainer}>
+                          <TextInput
+                            style={styles.editTaskInput}
+                            value={editingTaskText}
+                            onChangeText={setEditingTaskText}
+                            autoFocus
+                          />
+                          <View style={styles.editTaskButtons}>
+                            <TouchableOpacity 
+                              onPress={() => {
+                                setEditingTaskId(null);
+                                setEditingTaskText('');
+                              }}
+                              style={styles.cancelEditTaskButton}
+                            >
+                              <MaterialIcons name="close" size={18} color="#F44336" />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              onPress={() => updateTaskInCard(item.id, task.id, editingTaskText)}
+                              style={styles.confirmEditTaskButton}
+                            >
+                              <MaterialIcons name="check" size={18} color="#4DC25A" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <>
+                          <TouchableOpacity 
+                            onPress={() => toggleTaskComplete(item.id, task.id)}
+                            style={styles.todoCheckbox}
+                          >
+                            <MaterialIcons
+                              name={task.completed ? "check-box" : "check-box-outline-blank"}
+                              size={20}
+                              color={task.completed ? "#4DC25A" : "#757575"}
+                            />
+                          </TouchableOpacity>
+                          <Text style={[
+                            styles.todoText,
+                            task.completed && styles.todoCompleted
+                          ]}>
+                            {task.text}
+                          </Text>
+                          <View style={styles.todoActions}>
+                            <TouchableOpacity 
+                              onPress={() => {
+                                setEditingTaskId(task.id);
+                                setEditingTaskText(task.text);
+                              }}
+                              style={styles.editTaskButton}
+                            >
+                              <MaterialIcons name="edit" size={18} color="#4DC25A" />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              onPress={() => removeTaskFromCard(item.id, task.id)}
+                              style={styles.deleteTaskButton}
+                            >
+                              <MaterialIcons name="delete" size={18} color="#F44336" />
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  ))}
+                  {item.tasks?.length === 0 && (
+                    <Text style={styles.emptyListText}>Nenhuma tarefa adicionada</Text>
+                  )}
+                </ScrollView>
+              </View>
+
+              <View style={styles.addTaskContainer}>
+                <TextInput
+                  style={styles.addTaskInput}
+                  placeholder="Nova tarefa..."
+                  value={newTask}
+                  onChangeText={setNewTask}
+                  onSubmitEditing={() => addTaskToCard(item.id, newTask)}
+                />
+                <TouchableOpacity 
+                  style={styles.addTaskButton}
+                  onPress={() => addTaskToCard(item.id, newTask)}
+                >
+                  <MaterialIcons name="add" size={20} color="#4DC25A" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Menu de opções */}
+            {activeCardId === item.id && (
+              <View style={styles.cardOptionsMenu}>
+                <TouchableOpacity 
+                  style={styles.cardOption} 
+                  onPress={() => editCard(item)}
+                >
+                  <MaterialIcons name="edit" size={20} color="#4DC25A" />
+                  <Text style={styles.cardOptionText}>Editar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.cardOption} 
+                  onPress={() => deleteCard(item.id)}
+                >
+                  <MaterialIcons name="delete" size={20} color="#F44336" />
+                  <Text style={styles.cardOptionText}>Excluir</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Botões de ordem */}
+            <View style={styles.cardOrderButtons}>
+              <TouchableOpacity
+                style={styles.orderButton}
+                onPress={() => moveCardUp(index)}
+                disabled={index === 0}
               >
-                <MaterialIcons name="add" size={20} color="#4DC25A" />
+                <MaterialIcons 
+                  name="arrow-upward" 
+                  size={16} 
+                  color={index === 0 ? "#CCCCCC" : "#666666"} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.orderButton}
+                onPress={() => moveCardDown(index)}
+                disabled={index === cards.length - 1}
+              >
+                <MaterialIcons 
+                  name="arrow-downward" 
+                  size={16} 
+                  color={index === cards.length - 1 ? "#CCCCCC" : "#666666"} 
+                />
               </TouchableOpacity>
             </View>
           </View>
         );
-        cardStyle = styles.todoCard;
-        break;
-        
       case 'note':
         const formatted = item.formatting || {};
         cardContent = (
@@ -613,6 +691,108 @@ const [newTransaction, setNewTransaction] = useState({
         cardStyle = styles.financialCard;
         break;
         
+      case 'habit':
+        const totalHabits = item.habits?.length || 0;
+        const completedHabits = item.habits?.filter(h => h.completed).length || 0;
+        const completionPercentage = totalHabits > 0 ? (completedHabits / totalHabits * 100).toFixed(0) : 0;
+
+        cardContent = (
+          <View style={styles.habitCardContent}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Everyday Tasks</Text>
+            </View>
+            
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{totalHabits}</Text>
+                <Text style={styles.statLabel}>Habits</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{completedHabits}</Text>
+                <Text style={styles.statLabel}>Completed</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{completionPercentage}%</Text>
+                <Text style={styles.statLabel}>Today</Text>
+              </View>
+            </View>
+            
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBar, { width: `${completionPercentage}%` }]} />
+            </View>
+            
+            <ScrollView style={styles.habitsList} nestedScrollEnabled={true}>
+              {item.habits && item.habits.map(habit => (
+                <View key={habit.id} style={styles.habitItem}>
+                  <TouchableOpacity 
+                    onPress={() => toggleHabitComplete(item.id, habit.id)}
+                    style={styles.habitCheckContainer}
+                  >
+                    <View style={[
+                      styles.habitCheckbox, 
+                      habit.completed && styles.habitCheckboxCompleted,
+                      { borderColor: getPriorityColor(habit.priority) }
+                    ]}>
+                      {habit.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.habitContent}>
+                    <Text style={[styles.habitText, habit.completed && styles.habitTextCompleted]}>
+                      {habit.name}
+                    </Text>
+                    
+                    <View style={styles.habitDetails}>
+                      <View style={[styles.priorityTag, { backgroundColor: getPriorityColor(habit.priority) }]}>
+                        <Text style={styles.priorityText}>{getPriorityName(habit.priority)}</Text>
+                      </View>
+                      
+                      <View style={styles.streakContainer}>
+                        <MaterialIcons name="local-fire-department" size={14} color="#FF9800" />
+                        <Text style={styles.streakText}>{habit.streak} day{habit.streak !== 1 && 's'}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.habitActions}>
+                    <TouchableOpacity 
+                      onPress={() => startEditingHabit(item.id, habit)}
+                      style={styles.editHabitButton}
+                    >
+                      <MaterialIcons name="edit" size={18} color="#4DC25A" />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      onPress={() => deleteHabit(item.id, habit.id)}
+                      style={styles.deleteHabitButton}
+                    >
+                      <MaterialIcons name="delete" size={18} color="#F44336" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            
+            <View style={styles.addHabitContainer}>
+              <TextInput
+                style={styles.addHabitInput}
+                placeholder="Add new habit..."
+                value={newHabit}
+                onChangeText={setNewHabit}
+                onSubmitEditing={() => addHabitToCard(item.id)}
+              />
+              <TouchableOpacity 
+                style={styles.addHabitButton}
+                onPress={() => addHabitToCard(item.id)}
+              >
+                <MaterialIcons name="add" size={20} color="#4DC25A" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+        cardStyle = styles.habitCard;
+        break;
+        
       default:
         cardContent = <Text>Card desconhecido</Text>;
     }
@@ -677,6 +857,163 @@ const [newTransaction, setNewTransaction] = useState({
 
   // Sort cards by order
   const sortedCards = [...cards].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const getPriorityColor = (priority) => {
+    switch(priority) {
+      case 'high': return '#FF5252';
+      case 'medium': return '#FFB74D';
+      case 'low': return '#4CAF50';
+      default: return '#FFB74D';
+    }
+  };
+
+  const getPriorityName = (priority) => {
+    switch(priority) {
+      case 'high': return 'High';
+      case 'medium': return 'Medium';
+      case 'low': return 'Low';
+      default: return 'Medium';
+    }
+  };
+
+  // Function to toggle habit completion
+  const toggleHabitComplete = (cardId, habitId) => {
+    const today = new Date();
+    
+    setCards(currentCards => 
+      currentCards.map(card => {
+        if (card.id === cardId) {
+          const updatedHabits = card.habits.map(habit => {
+            if (habit.id === habitId) {
+              if (habit.completed) {
+                return { 
+                  ...habit, 
+                  completed: false,
+                  streak: Math.max(0, habit.streak - 1)
+                };
+              } else {
+                const newStreak = habit.streak + 1;
+                return { 
+                  ...habit, 
+                  completed: true,
+                  streak: newStreak,
+                  bestStreak: Math.max(habit.bestStreak || 0, newStreak),
+                  lastCompleted: today.toISOString()
+                };
+              }
+            }
+            return habit;
+          });
+          
+          return { ...card, habits: updatedHabits };
+        }
+        return card;
+      })
+    );
+  };
+
+  // Function to add habit to card
+  const addHabitToCard = (cardId) => {
+    if (newHabit.trim() === '') {
+      Alert.alert('Error', 'Please enter a habit');
+      return;
+    }
+
+    const newHabitObj = {
+      id: Date.now().toString(),
+      name: newHabit,
+      priority: 'medium',
+      streak: 0,
+      bestStreak: 0,
+      completed: false,
+      lastCompleted: null,
+      createdAt: new Date().toISOString()
+    };
+
+    setCards(currentCards => 
+      currentCards.map(card => {
+        if (card.id === cardId) {
+          return {
+            ...card,
+            habits: [...(card.habits || []), newHabitObj]
+          };
+        }
+        return card;
+      })
+    );
+
+    setNewHabit('');
+  };
+
+  // Function to delete habit
+  const deleteHabit = (cardId, habitId) => {
+    Alert.alert(
+      'Confirm deletion',
+      'Are you sure you want to delete this habit? Your streak will be lost.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          onPress: () => {
+            setCards(currentCards => 
+              currentCards.map(card => {
+                if (card.id === cardId) {
+                  return {
+                    ...card,
+                    habits: card.habits.filter(habit => habit.id !== habitId)
+                  };
+                }
+                return card;
+              })
+            );
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
+  // Function to start editing habit
+  const startEditingHabit = (cardId, habit) => {
+    setEditingHabit({ cardId, ...habit });
+    setHabitName(habit.name);
+    setHabitPriority(habit.priority);
+    setHabitModalVisible(true);
+  };
+
+  // Function to save habit edits
+  const saveHabitEdits = () => {
+    if (habitName.trim() === '') {
+      Alert.alert('Error', 'The habit name cannot be empty');
+      return;
+    }
+
+    if (editingHabit) {
+      setCards(currentCards => 
+        currentCards.map(card => {
+          if (card.id === editingHabit.cardId) {
+            return {
+              ...card,
+              habits: card.habits.map(habit => 
+                habit.id === editingHabit.id 
+                  ? { ...habit, name: habitName, priority: habitPriority } 
+                  : habit
+              )
+            };
+          }
+          return card;
+        })
+      );
+    }
+    
+    setHabitModalVisible(false);
+    setEditingHabit(null);
+    setHabitName('');
+    setHabitPriority('medium');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: project.color }]}>
@@ -743,6 +1080,14 @@ const [newTransaction, setNewTransaction] = useState({
             <MaterialIcons name="account-balance-wallet" size={24} color="#9C27B0" />
             <Text style={styles.cardTypeText}>Financeiro</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.cardTypeOption} onPress={() => {
+            setShowAddCardSidebar(false);
+            setHabitModalVisible(true);
+            setHabits([]);
+          }}>
+            <MaterialIcons name="repeat" size={24} color="#673AB7" />
+            <Text style={styles.cardTypeText}>Everyday Tasks</Text>
+          </TouchableOpacity>
         </Animated.View>
       )}
 
@@ -762,76 +1107,34 @@ const [newTransaction, setNewTransaction] = useState({
               <Text style={styles.modalTitle}>Nova Lista de Tarefas</Text>
               
               <View style={styles.todoContainer}>
-                <FlatList
-                  data={todoTasks}
-                  keyExtractor={item => item.id}
-                  renderItem={({ item }) => {
-                    if (item.id === modalEditingTaskId) {
-                      return (
-                        <View style={styles.editTaskContainer}>
-                          <TextInput
-                            style={styles.editTaskInput}
-                            value={modalEditingTaskText}
-                            onChangeText={setModalEditingTaskText}
-                            autoFocus
-                          />
-                          <View style={styles.editTaskButtons}>
-                            <TouchableOpacity
-                              onPress={() => {
-                                setModalEditingTaskId(null);
-                                setModalEditingTaskText('');
-                              }}
-                              style={styles.cancelEditTaskButton}
-                            >
-                              <MaterialIcons name="close" size={18} color="#F44336" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => {
-                                const updatedTasks = todoTasks.map(t =>
-                                  t.id === item.id ? { ...t, text: modalEditingTaskText } : t
-                                );
-                                setTodoTasks(updatedTasks);
-                                setModalEditingTaskId(null);
-                                setModalEditingTaskText('');
-                              }}
-                              style={styles.confirmEditTaskButton}
-                            >
-                              <MaterialIcons name="check" size={18} color="#4DC25A" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    }
-                    return (
-                      <View style={styles.todoItem}>
-                        <MaterialIcons name="check-box-outline-blank" size={20} color="#757575" />
-                        <Text style={styles.todoText}>{item.text}</Text>
-                        <View style={styles.todoActions}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              setModalEditingTaskId(item.id);
-                              setModalEditingTaskText(item.text);
-                            }}
-                            style={styles.editTaskButton}
-                          >
-                            <MaterialIcons name="edit" size={18} color="#4DC25A" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => {
-                              const updatedTasks = todoTasks.filter(t => t.id !== item.id);
-                              setTodoTasks(updatedTasks);
-                            }}
-                            style={styles.deleteTaskButton}
-                          >
-                            <MaterialIcons name="delete" size={18} color="#F44336" />
-                          </TouchableOpacity>
-                        </View>
+                <ScrollView style={styles.todoList} nestedScrollEnabled={true}>
+                  {todoTasks.map(item => (
+                    <View key={item.id} style={styles.todoItem}>
+                      <MaterialIcons name="check-box-outline-blank" size={20} color="#757575" />
+                      <Text style={styles.todoText}>{item.text}</Text>
+                      <View style={styles.todoActions}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setModalEditingTaskId(item.id);
+                            setModalEditingTaskText(item.text);
+                          }}
+                          style={styles.editTaskButton}
+                        >
+                          <MaterialIcons name="edit" size={18} color="#4DC25A" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const updatedTasks = todoTasks.filter(t => t.id !== item.id);
+                            setTodoTasks(updatedTasks);
+                          }}
+                          style={styles.deleteTaskButton}
+                        >
+                          <MaterialIcons name="delete" size={18} color="#F44336" />
+                        </TouchableOpacity>
                       </View>
-                    );
-                  }}
-                  style={styles.todoModalList}
-                  ListEmptyComponent={<Text style={styles.emptyListText}>Adicione tarefas abaixo</Text>}
-                />
+                    </View>
+                  ))}
+                </ScrollView>
                 
                 <View style={styles.addTodoContainer}>
                   <TextInput
@@ -1114,6 +1417,241 @@ const [newTransaction, setNewTransaction] = useState({
                 >
                   <Text style={styles.createButtonText}>
                     {editingCard ? 'Salvar' : 'Criar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Modal for habit creation */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={habitModalVisible}
+        onRequestClose={() => {
+          setHabitModalVisible(false);
+          setEditingHabit(null);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.keyboardAvoidingContainer}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {editingHabit ? "Edit Habit" : "Everyday Tasks"}
+              </Text>
+              
+              {!editingHabit && (
+                <>
+                  <View style={styles.habitsContainer}>
+                    <FlatList
+                      data={habits}
+                      keyExtractor={item => item.id}
+                      renderItem={({ item }) => (
+                        <View style={styles.habitItemSetup}>
+                          <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(item.priority) }]} />
+                          <Text style={styles.habitSetupText}>{item.name}</Text>
+                          <View style={styles.habitSetupActions}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setHabitName(item.name);
+                                setHabitPriority(item.priority);
+                                setEditingHabit(item);
+                              }}
+                              style={styles.habitSetupEdit}
+                            >
+                              <MaterialIcons name="edit" size={18} color="#4DC25A" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setHabits(habits.filter(h => h.id !== item.id));
+                              }}
+                              style={styles.habitSetupDelete}
+                            >
+                              <MaterialIcons name="delete" size={18} color="#F44336" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                      style={styles.habitSetupList}
+                      ListEmptyComponent={<Text style={styles.emptyListText}>Add your daily habits below</Text>}
+                    />
+                  </View>
+                  
+                  <View style={styles.habitFormContainer}>
+                    <TextInput
+                      style={styles.habitNameInput}
+                      placeholder="New habit..."
+                      value={habitName}
+                      onChangeText={setHabitName}
+                    />
+                    
+                    <View style={styles.prioritySelector}>
+                      <TouchableOpacity 
+                        style={[
+                          styles.priorityOption, 
+                          { backgroundColor: habitPriority === 'low' ? '#4CAF50' : '#F5F5F5' }
+                        ]}
+                        onPress={() => setHabitPriority('low')}
+                      >
+                        <Text style={[styles.priorityOptionText, habitPriority === 'low' && { color: '#FFFFFF' }]}>
+                          Low
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[
+                          styles.priorityOption, 
+                          { backgroundColor: habitPriority === 'medium' ? '#FFB74D' : '#F5F5F5' }
+                        ]}
+                        onPress={() => setHabitPriority('medium')}
+                      >
+                        <Text style={[styles.priorityOptionText, habitPriority === 'medium' && { color: '#FFFFFF' }]}>
+                          Medium
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[
+                          styles.priorityOption, 
+                          { backgroundColor: habitPriority === 'high' ? '#FF5252' : '#F5F5F5' }
+                        ]}
+                        onPress={() => setHabitPriority('high')}
+                      >
+                        <Text style={[styles.priorityOptionText, habitPriority === 'high' && { color: '#FFFFFF' }]}>
+                          High
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.addHabitSetupButton}
+                      onPress={() => {
+                        if (habitName.trim() === '') {
+                          Alert.alert('Error', 'Please enter a habit name');
+                          return;
+                        }
+                        
+                        if (editingHabit) {
+                          setHabits(currentHabits => 
+                            currentHabits.map(h => 
+                              h.id === editingHabit.id 
+                                ? { ...h, name: habitName, priority: habitPriority } 
+                                : h
+                            )
+                          );
+                          setEditingHabit(null);
+                        } else {
+                          const newHabit = {
+                            id: Date.now().toString(),
+                            name: habitName,
+                            priority: habitPriority,
+                            streak: 0,
+                            bestStreak: 0,
+                            completed: false,
+                            lastCompleted: null,
+                            createdAt: new Date().toISOString()
+                          };
+                          setHabits([...habits, newHabit]);
+                        }
+                        
+                        setHabitName('');
+                        setHabitPriority('medium');
+                      }}
+                    >
+                      <Text style={styles.addHabitSetupText}>{editingHabit ? 'Update Habit' : 'Add Habit'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+              
+              {editingHabit && editingHabit.cardId && (
+                <View style={styles.habitEditContainer}>
+                  <TextInput
+                    style={styles.habitNameInput}
+                    placeholder="Habit name"
+                    value={habitName}
+                    onChangeText={setHabitName}
+                  />
+                  
+                  <Text style={styles.priorityLabel}>Priority:</Text>
+                  <View style={styles.prioritySelector}>
+                    <TouchableOpacity 
+                      style={[
+                        styles.priorityOption, 
+                        { backgroundColor: habitPriority === 'low' ? '#4CAF50' : '#F5F5F5' }
+                      ]}
+                      onPress={() => setHabitPriority('low')}
+                    >
+                      <Text style={[styles.priorityOptionText, habitPriority === 'low' && { color: '#FFFFFF' }]}>
+                        Low
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[
+                        styles.priorityOption, 
+                        { backgroundColor: habitPriority === 'medium' ? '#FFB74D' : '#F5F5F5' }
+                      ]}
+                      onPress={() => setHabitPriority('medium')}
+                    >
+                      <Text style={[styles.priorityOptionText, habitPriority === 'medium' && { color: '#FFFFFF' }]}>
+                        Medium
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[
+                        styles.priorityOption, 
+                        { backgroundColor: habitPriority === 'high' ? '#FF5252' : '#F5F5F5' }
+                      ]}
+                      onPress={() => setHabitPriority('high')}
+                    >
+                      <Text style={[styles.priorityOptionText, habitPriority === 'high' && { color: '#FFFFFF' }]}>
+                        High
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.habitStreakInfo}>
+                    <View style={styles.streakDisplayContainer}>
+                      <MaterialIcons name="local-fire-department" size={18} color="#FF9800" />
+                      <Text style={styles.streakDisplayText}>Current streak: {editingHabit.streak} days</Text>
+                    </View>
+                    
+                    <View style={styles.streakDisplayContainer}>
+                      <MaterialIcons name="emoji-events" size={18} color="#FFC107" />
+                      <Text style={styles.streakDisplayText}>Best streak: {editingHabit.bestStreak || 0} days</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+              
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setHabitModalVisible(false);
+                    setEditingHabit(null);
+                    setHabitName('');
+                    setHabitPriority('medium');
+                  }}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.createButton]}
+                  onPress={() => {
+                    if (editingHabit && editingHabit.cardId) {
+                      saveHabitEdits();
+                    } else {
+                      saveCard('habit');
+                    }
+                  }}
+                >
+                  <Text style={styles.createButtonText}>
+                    {editingHabit ? 'Save' : 'Create'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1734,6 +2272,225 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 20,
     marginTop: 10,
+  },
+  habitCard: {
+    backgroundColor: 'white',
+  },
+  habitCardContent: {
+    flex: 1,
+  },
+  habitsList: {
+    maxHeight: 200,
+  },
+  habitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  habitCheckContainer: {
+    marginRight: 10,
+  },
+  habitCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  habitCheckboxCompleted: {
+    backgroundColor: '#4DC25A',
+    borderColor: '#4DC25A',
+  },
+  habitContent: {
+    flex: 1,
+  },
+  habitText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  habitTextCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#888',
+  },
+  habitDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  priorityTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  priorityText: {
+    fontSize: 10,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  streakText: {
+    fontSize: 11,
+    color: '#666',
+    marginLeft: 2,
+  },
+  habitActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editHabitButton: {
+    padding: 5,
+    marginRight: 5,
+  },
+  deleteHabitButton: {
+    padding: 5,
+  },
+  addHabitContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  addHabitInput: {
+    flex: 1,
+    height: 36,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#333',
+    marginRight: 10,
+  },
+  addHabitButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(77, 194, 90, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Habit setup modal styles
+  habitSetupList: {
+    maxHeight: 200,
+    width: '100%',
+    marginBottom: 15,
+  },
+  habitItemSetup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  priorityIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  habitSetupText: {
+    fontSize: 15,
+    color: '#333',
+    flex: 1,
+  },
+  habitSetupActions: {
+    flexDirection: 'row',
+  },
+  habitSetupEdit: {
+    padding: 6,
+    marginRight: 5,
+  },
+  habitSetupDelete: {
+    padding: 6,
+  },
+  habitsContainer: {
+    width: '100%',
+    marginBottom: 10,
+  },
+  habitFormContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  habitNameInput: {
+    width: '100%',
+    height: 45,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 22.5,
+    paddingHorizontal: 15,
+    marginBottom: 10,
+  },
+  prioritySelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+    width: '100%',
+  },
+  priorityOption: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 5,
+    marginHorizontal: 3,
+  },
+  priorityOptionText: {
+    fontWeight: '500',
+    fontSize: 13,
+  },
+  addHabitSetupButton: {
+    backgroundColor: '#4DC25A',
+    borderRadius: 22.5,
+    paddingVertical: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  addHabitSetupText: {
+    color: 'white',
+    fontWeight: '500',
+    fontSize: 15,
+  },
+  priorityLabel: {
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    fontSize: 15,
+    color: '#555',
+  },
+  habitEditContainer: {
+    width: '100%',
+    marginBottom: 10,
+  },
+  habitStreakInfo: {
+    width: '100%',
+    marginTop: 15,
+    padding: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+  },
+  streakDisplayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  streakDisplayText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#444',
+  },
+  todoListContainer: {
+    marginBottom: 10,
+  },
+  todoListContent: {
+    paddingBottom: 10,
   },
 });
 

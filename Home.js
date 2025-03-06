@@ -50,6 +50,11 @@ export default function Home({ route, navigation }) {
   const [userAvatar, setUserAvatar] = useState('');
   const [tempUserName, setTempUserName] = useState('');
   const [tempUserAvatar, setTempUserAvatar] = useState('');
+  const [habits, setHabits] = useState([]);
+  const [habitModalVisible, setHabitModalVisible] = useState(false);
+  const [habitName, setHabitName] = useState('');
+  const [habitPriority, setHabitPriority] = useState('medium');
+  const [editingHabit, setEditingHabit] = useState(null);
 
   // Cores disponíveis para os projetos
   const projectColors = [
@@ -73,6 +78,7 @@ export default function Home({ route, navigation }) {
     loadTasks();
     loadProjects();
     loadReminders();
+    loadHabits();
   }, []);
 
   // Salvar tarefas no AsyncStorage sempre que mudar
@@ -110,6 +116,41 @@ export default function Home({ route, navigation }) {
     };
     loadUserData();
   }, [route?.params]);
+
+  // Adicione estes useEffects junto com os outros
+  useEffect(() => {
+    saveHabits();
+  }, [habits]);
+
+  // Adicione o useEffect para verificação diária dos hábitos
+  useEffect(() => {
+    const checkHabitsDaily = () => {
+      const today = new Date().setHours(0, 0, 0, 0);
+      
+      setHabits(currentHabits => 
+        currentHabits.map(habit => {
+          if (habit.lastCompleted && new Date(habit.lastCompleted).setHours(0, 0, 0, 0) < today) {
+            return { ...habit, completed: false };
+          }
+          return habit;
+        })
+      );
+    };
+    
+    checkHabitsDaily();
+    
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const msUntilMidnight = midnight.getTime() - new Date().getTime();
+    
+    const midnightTimeout = setTimeout(() => {
+      checkHabitsDaily();
+      const dailyInterval = setInterval(checkHabitsDaily, 24 * 60 * 60 * 1000);
+      return () => clearInterval(dailyInterval);
+    }, msUntilMidnight);
+    
+    return () => clearTimeout(midnightTimeout);
+  }, []);
 
   // Fechar o tooltip quando clicar fora dele
   const handleOutsideTooltipPress = () => {
@@ -152,6 +193,17 @@ export default function Home({ route, navigation }) {
     }
   };
 
+  const loadHabits = async () => {
+    try {
+      const storedHabits = await AsyncStorage.getItem('@habits');
+      if (storedHabits !== null) {
+        setHabits(JSON.parse(storedHabits));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar hábitos:', error);
+    }
+  };
+
   // Funções de salvamento no AsyncStorage
   const saveTasks = async () => {
     try {
@@ -174,6 +226,14 @@ export default function Home({ route, navigation }) {
       await AsyncStorage.setItem('@reminders', JSON.stringify(reminders));
     } catch (error) {
       console.error('Erro ao salvar lembretes:', error);
+    }
+  };
+
+  const saveHabits = async () => {
+    try {
+      await AsyncStorage.setItem('@habits', JSON.stringify(habits));
+    } catch (error) {
+      console.error('Erro ao salvar hábitos:', error);
     }
   };
 
@@ -679,6 +739,167 @@ export default function Home({ route, navigation }) {
     navigation.replace('Login');
   };
 
+  // Adicionar funções de gerenciamento de hábitos
+  const addHabit = () => {
+    if (habitName.trim() === '') {
+      Alert.alert('Error', 'Please enter a habit name');
+      return;
+    }
+
+    if (editingHabit) {
+      // Edit existing habit
+      const updatedHabits = habits.map(habit => 
+        habit.id === editingHabit.id 
+          ? { 
+              ...habit, 
+              name: habitName,
+              priority: habitPriority
+            } 
+          : habit
+      );
+      setHabits(updatedHabits);
+      setEditingHabit(null);
+    } else {
+      // Add new habit
+      const newHabit = {
+        id: Date.now().toString(),
+        name: habitName,
+        priority: habitPriority,
+        streak: 0,
+        bestStreak: 0,
+        completed: false,
+        lastCompleted: null,
+        createdAt: new Date().toISOString()
+      };
+      setHabits([...habits, newHabit]);
+    }
+    
+    setHabitName('');
+    setHabitPriority('medium');
+    setHabitModalVisible(false);
+  };
+
+  const toggleHabitComplete = (id) => {
+    const today = new Date();
+    const todayStr = today.toISOString();
+    
+    setHabits(currentHabits => 
+      currentHabits.map(habit => {
+        if (habit.id === id) {
+          // If already completed today, uncomplete it
+          if (habit.completed) {
+            return { 
+              ...habit, 
+              completed: false,
+              streak: Math.max(0, habit.streak - 1)
+            };
+          } else {
+            // If completing for the first time today
+            const newStreak = habit.streak + 1;
+            return { 
+              ...habit, 
+              completed: true,
+              streak: newStreak,
+              bestStreak: Math.max(habit.bestStreak, newStreak),
+              lastCompleted: todayStr
+            };
+          }
+        }
+        return habit;
+      })
+    );
+  };
+
+  const deleteHabit = (id) => {
+    Alert.alert(
+      'Confirm deletion',
+      'Are you sure you want to delete this habit? Your streak will be lost.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          onPress: () => {
+            setHabits(habits.filter(habit => habit.id !== id));
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
+  const startEditingHabit = (habit) => {
+    setEditingHabit(habit);
+    setHabitName(habit.name);
+    setHabitPriority(habit.priority);
+    setHabitModalVisible(true);
+  };
+
+  // Priority color mapping
+  const getPriorityColor = (priority) => {
+    switch(priority) {
+      case 'high': return '#FF5252';
+      case 'medium': return '#FFB74D';
+      case 'low': return '#4CAF50';
+      default: return '#FFB74D';
+    }
+  };
+
+  const getPriorityName = (priority) => {
+    switch(priority) {
+      case 'high': return 'High';
+      case 'medium': return 'Medium';
+      case 'low': return 'Low';
+      default: return 'Medium';
+    }
+  };
+
+  // Render habit item
+  const renderHabitItem = ({ item }) => (
+    <View style={styles.habitItem}>
+      <View style={styles.habitLeftSection}>
+        <TouchableOpacity 
+          style={[styles.habitCheckbox, item.completed && styles.habitCheckboxCompleted]}
+          onPress={() => toggleHabitComplete(item.id)}
+        >
+          {item.completed && <MaterialIcons name="check" size={18} color="#FFFFFF" />}
+        </TouchableOpacity>
+        
+        <View style={styles.habitTextContainer}>
+          <Text style={[styles.habitText, item.completed && styles.habitTextCompleted]}>
+            {item.name}
+          </Text>
+          <View style={styles.habitDetailsRow}>
+            <View style={[styles.priorityTag, { backgroundColor: getPriorityColor(item.priority) }]}>
+              <Text style={styles.priorityText}>{getPriorityName(item.priority)}</Text>
+            </View>
+            <View style={styles.streakContainer}>
+              <MaterialIcons name="local-fire-department" size={14} color="#FF9800" />
+              <Text style={styles.streakText}>{item.streak} day{item.streak !== 1 && 's'}</Text>
+            </View>
+            {item.bestStreak > 0 && (
+              <View style={styles.bestStreakContainer}>
+                <MaterialIcons name="emoji-events" size={14} color="#FFC107" />
+                <Text style={styles.bestStreakText}>{item.bestStreak}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+      
+      <View style={styles.habitActions}>
+        <TouchableOpacity onPress={() => startEditingHabit(item)} style={styles.habitEditButton}>
+          <MaterialIcons name="edit" size={20} color="#4DC25A" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => deleteHabit(item.id)} style={styles.habitDeleteButton}>
+          <MaterialIcons name="delete-outline" size={20} color="#F44336" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   // Se estiver mostrando a tela de projeto, renderize-a em vez da tela principal
   if (showProjectScreen && selectedProject) {
     return (
@@ -733,7 +954,7 @@ export default function Home({ route, navigation }) {
         <View style={styles.progressSection}>
           <View style={styles.statsRow}>
             <Text style={styles.statsText}>
-              {totalTasks} / {completedTasks}  ({completionPercentage}%)
+             {completedTasks}  / {totalTasks}  ({completionPercentage}%)
             </Text>
           </View>
           <View style={styles.progressContainer}>
@@ -835,6 +1056,43 @@ export default function Home({ route, navigation }) {
                 <MaterialIcons name="notifications-none" size={50} color="#E5E5E5" />
                 <Text style={styles.emptyText}>Nenhum lembrete</Text>
                 <Text style={styles.emptySubtext}>Toque no + para adicionar</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Adicione a seção de hábitos aqui, antes do fechamento do ScrollView */}
+        <View style={styles.habitsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Everyday Tasks</Text>
+            <TouchableOpacity 
+              style={styles.addHabitButton}
+              onPress={() => {
+                setEditingHabit(null);
+                setHabitName('');
+                setHabitPriority('medium');
+                setHabitModalVisible(true);
+              }}
+            >
+              <MaterialIcons name="add" size={24} color="#4DC25A" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.habitsContainer}>
+            {habits.length > 0 ? (
+              <FlatList
+                data={habits}
+                renderItem={renderHabitItem}
+                keyExtractor={item => item.id}
+                style={styles.habitsList}
+                contentContainerStyle={styles.habitsContent}
+                nestedScrollEnabled={true}
+              />
+            ) : (
+              <View style={styles.emptyHabits}>
+                <MaterialIcons name="repeat" size={50} color="#E5E5E5" />
+                <Text style={styles.emptyText}>No daily habits yet</Text>
+                <Text style={styles.emptySubtext}>Tap + to start building habits</Text>
               </View>
             )}
           </View>
@@ -1051,6 +1309,88 @@ export default function Home({ route, navigation }) {
                 onPress={saveProfileChanges}
               >
                 <Text style={styles.createButtonText}>Salvar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Adicione o modal de hábitos aqui, junto com os outros modais */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={habitModalVisible}
+        onRequestClose={() => {
+          setHabitModalVisible(false);
+          setEditingHabit(null);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingHabit ? "Edit Habit" : "New Daily Habit"}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="What habit do you want to build?"
+              value={habitName}
+              onChangeText={setHabitName}
+            />
+            
+            <Text style={styles.priorityLabel}>Priority:</Text>
+            <View style={styles.prioritySelector}>
+              <TouchableOpacity 
+                style={[
+                  styles.priorityOption, 
+                  { backgroundColor: habitPriority === 'low' ? '#4CAF50' : '#F5F5F5' }
+                ]}
+                onPress={() => setHabitPriority('low')}
+              >
+                <Text style={[styles.priorityOptionText, habitPriority === 'low' && { color: '#FFFFFF' }]}>
+                  Low
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[
+                  styles.priorityOption, 
+                  { backgroundColor: habitPriority === 'medium' ? '#FFB74D' : '#F5F5F5' }
+                ]}
+                onPress={() => setHabitPriority('medium')}
+              >
+                <Text style={[styles.priorityOptionText, habitPriority === 'medium' && { color: '#FFFFFF' }]}>
+                  Medium
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[
+                  styles.priorityOption, 
+                  { backgroundColor: habitPriority === 'high' ? '#FF5252' : '#F5F5F5' }
+                ]}
+                onPress={() => setHabitPriority('high')}
+              >
+                <Text style={[styles.priorityOptionText, habitPriority === 'high' && { color: '#FFFFFF' }]}>
+                  High
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => {
+                  setHabitModalVisible(false);
+                  setEditingHabit(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.createButton]} 
+                onPress={addHabit}
+              >
+                <Text style={styles.createButtonText}>
+                  {editingHabit ? "Save" : "Create"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1592,5 +1932,134 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     zIndex: 99,
+  },
+  habitsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  habitsContainer: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 8,
+    padding: 15,
+  },
+  habitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  habitLeftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  habitCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#4DC25A',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  habitCheckboxCompleted: {
+    backgroundColor: '#4DC25A',
+    borderColor: '#4DC25A',
+  },
+  habitTextContainer: {
+    flex: 1,
+  },
+  habitText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  habitTextCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#999',
+  },
+  habitDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  priorityTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  priorityText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  streakText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  bestStreakContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bestStreakText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  habitActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  habitEditButton: {
+    padding: 5,
+    marginRight: 5,
+  },
+  habitDeleteButton: {
+    padding: 5,
+  },
+  priorityLabel: {
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    fontSize: 16,
+    color: '#555',
+  },
+  prioritySelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+  },
+  priorityOption: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  priorityOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  emptyHabits: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
   },
 });
